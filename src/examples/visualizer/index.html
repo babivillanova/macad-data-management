@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <!-- <link rel="apple-touch-icon" sizes="180x180" href="../favicon/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="../favicon/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="../favicon/favicon-16x16.png">
+        <link rel="manifest" href="../favicon/site.webmanifest"> -->
+        <title>Shape by Sound</title>
+        <style>
+            body {
+                margin: 20px;
+                width:70%;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                background-color: rgb(0, 0, 0);
+            }
+            #info {  
+              text-align: left;
+              background-color: transparent;
+              color: rgb(255, 255, 255);
+              margin: 20px;
+            }
+
+
+
+            h4{color: azure;
+                font-weight:lighter;
+                font-family: monospace; }
+             h2{color: rgb(255, 255, 255);
+                font-weight:normal;
+                font-family: monospace; }
+            input[type=range] { width: 100%; }
+            #container { margin: 0 auto; width: 50%;}
+            #overlay { z-index: 1; width: 100%; }
+            #overlay div { padding: 2px; }
+
+            #loader {
+                border: 5px linear-gradient(112.72013189013455deg, rgba(249, 123, 92,1) 4.927083333333334%,rgba(176, 77, 230,1) 97.84374999999999%); 
+                border-top: 5px solid #3d3d3d; /* Grey */
+                border-radius: 10%;
+                width: 40px;
+                height: 20px;
+                animation: spin 1s linear infinite;
+                position:relative;
+                top: 25%;
+                left: 25%;
+                z-index: 2;
+                display: none; /* start hidden */
+            }
+
+            .button {
+                background-color: rgb(0, 0, 0);
+                color:rgb(255, 185, 168);
+                border: 2px solid rgb(255, 185, 168);
+
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+        </style>
+    </head>
+
+    <body>
+  
+        <div>
+            <h2>SoundMadeNecklace</h2> </div>
+        <div id="content">
+        <div>
+            <input type="file" id="thefile" accept="audio/*" />
+        </div>
+        <br>
+        <div class="audio"> 
+        <audio id="audio" controls></audio> 
+        </div>
+      
+        <div>
+        <div class="controle row">
+            <h4>Upload your audio file to generate a SoundMadeNecklace. After a few seconds playing, press pause and wait for the results.
+            
+            <h4> Once generated, download your SoundMadeNecklace and set it up for 3D printing or CNC cutting.</h4>
+ 
+         </div>
+              <div class="row"><button id="downloadButton" disabled>Download</button></div>
+           <div id="loader"></div> 
+<console class="log"></console>
+       </div>
+
+
+
+
+        <script type="module">
+
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.124.0/build/three.module.js'
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.124.0/examples/jsm/controls/OrbitControls.js'
+import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.124.0/examples/jsm/loaders/3DMLoader.js'
+import rhino3dm from 'https://cdn.jsdelivr.net/npm/rhino3dm@0.15.0-beta/rhino3dm.module.js'
+import { RhinoCompute } from 'https://cdn.jsdelivr.net/npm/compute-rhino3d@0.13.0-beta/compute.rhino3d.module.js'
+
+let doc 
+
+const loader = new Rhino3dmLoader()
+loader.setLibraryPath( 'https://cdn.jsdelivr.net/npm/rhino3dm@0.15.0-beta/' )
+
+// initialise 'data' object that will be used by compute()
+const data = {
+  definition: 'sound_made_necklace_simple.gh',
+  inputs: {
+    'points':[] // start with an empty list (corresponds to "points" input)
+  }
+}
+
+//global
+let rhino
+
+rhino3dm().then(async m => {
+  console.log('Loaded rhino3dm.')
+    rhino = m
+
+    
+    // // local 
+    // // RhinoCompute.url = 'http://localhost:8081/' // Rhino.Compute server url
+
+    // RhinoCompute.url = 'https://macad2021.compute.rhino3d.com/'
+    // RhinoCompute.apiKey = getApiKey() // needed when calling a remote RhinoCompute server
+
+    // source a .gh/.ghx file in the same directory
+    
+   
+    let url = data.definition
+    let res = await fetch(url)
+    let buffer = await res.arrayBuffer()
+    let definition = new Uint8Array(buffer)
+    
+    init()
+  
+
+})
+
+function showSpinner(enable) {
+  if (enable)
+    document.getElementById('loader').style.display = 'block'
+  else
+    document.getElementById('loader').style.display = 'none'
+}
+
+function download () {
+    // write rhino doc to "blob"
+    const bytes = doc.toByteArray()
+    const blob = new Blob([bytes], {type: "application/octect-stream"})
+
+    // use "hidden link" trick to get the browser to download the blob
+    const filename = data.definition.replace(/\.gh$/, '') + '.3dm'
+    const link = document.createElement('a')
+    link.href = window.URL.createObjectURL(blob)
+    link.download = filename
+    link.click()
+}
+
+const downloadButton = document.getElementById("downloadButton")
+downloadButton.onclick = download
+
+// function getApiKey() {
+//     let auth = null
+//     auth = localStorage['compute_api_key']
+//     if (auth == null) {
+//         auth = window.prompt('RhinoCompute Server API Key')
+//         if (auth != null) {
+//             localStorage.setItem('compute_api_key', auth)
+//         }
+//     }
+//     return auth
+// }
+
+function init () {
+  // Rhino models are z-up, so set this as the default
+  THREE.Object3D.DefaultUp = new THREE.Vector3( 0, 0, 1 );
+
+  scene = new THREE.Scene()
+  scene.background = new THREE.Color(1,1,1) 
+  camera = new THREE.PerspectiveCamera( 60, window.innerWidth/window.innerHeight, 1, 500 )
+  camera.position.set(0, 0, 1) // like perspective view
+
+      // very light grey for background, like rhino
+      scene.background = new THREE.Color('black')
+
+  renderer = new THREE.WebGLRenderer({antialias: true})
+  renderer.setPixelRatio( window.devicePixelRatio )
+  renderer.setSize( window.innerWidth, window.innerHeight )
+  document.body.appendChild(renderer.domElement)
+
+  controls = new OrbitControls( camera, renderer.domElement  )
+
+      // add a directional light
+      const directionalLight = new THREE.DirectionalLight( 0xffffff )
+    directionalLight.intensity = 2
+    scene.add( directionalLight )
+
+    const ambientLight = new THREE.AmbientLight()
+    scene.add( ambientLight )
+
+  window.addEventListener( 'resize', onWindowResize, false )
+
+  animate()
+}
+
+function decodeItem(item) {
+  const data = JSON.parse(item.data)
+  if (item.type === 'System.String') {
+    // hack for draco meshes
+    try {
+        return rhino.DracoCompression.decompressBase64String(data)
+    } catch {} // ignore errors (maybe the string was just a string...)
+  } else if (typeof data === 'object') {
+    return rhino.CommonObject.decode(data)
+  }
+  return null
+}
+
+function animate () {
+  requestAnimationFrame( animate )
+  controls.update()
+  renderer.render( scene, camera )
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize( window.innerWidth, window.innerHeight )
+  animate()
+}
+
+function zoomCameraToSelection( camera, controls, selection, fitOffset = 1.2 ) {
+  
+  const box = new THREE.Box3();
+  
+  for( const object of selection ) {
+    if (object.isLight) continue
+    box.expandByObject( object );
+  }
+  
+  const size = box.getSize( new THREE.Vector3() );
+  const center = box.getCenter( new THREE.Vector3() );
+  
+  const maxSize = Math.max( size.x, size.y, size.z );
+  const fitHeightDistance = maxSize / ( 2 * Math.atan( Math.PI * camera.fov / 360 ) );
+  const fitWidthDistance = fitHeightDistance / camera.aspect;
+  const distance = fitOffset * Math.max( fitHeightDistance, fitWidthDistance );
+  
+  const direction = controls.target.clone()
+    .sub( camera.position )
+    .normalize()
+    .multiplyScalar( distance );
+  controls.maxDistance = distance * 10;
+  controls.target.copy( center );
+  
+  camera.near = distance / 100;
+  camera.far = distance * 100;
+  camera.updateProjectionMatrix();
+  camera.position.copy( controls.target ).sub(direction);
+  
+  controls.update();
+  
+}
+
+
+ 
+  var dataArray
+  var analyser
+  var bufferLength
+  var totalDados = []
+  var dadosExportar = []
+  
+  
+  
+  window.onload = function() {
+    
+      var file = document.getElementById("thefile");
+      var audio = document.getElementById("audio");
+      
+      file.onchange = function(value) {
+  
+        //Create audio source and connect it to the input file
+        var files = this.files;
+        console.log('files => ', this.files)
+        audio.src = URL.createObjectURL(files[0]);
+        audio.load();
+        audio.play();
+        var context = new AudioContext();
+        var src = context.createMediaElementSource(audio);
+        analyser = context.createAnalyser();
+    
+ 
+  
+        //Connect audio node analyser and adjust settings
+        src.connect(analyser);
+        analyser.connect(context.destination);
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.9;
+        //analyser.minDecibels = -90;
+        //analyser.maxDecibels = -10;
+        
+        //Variable information used for drawing the bands of the visualizer
+        //Default audio context includes frequencies well above the audible range.
+        //To adjust this we truncate frequencyBinCount to include only audible frequencies.
+        //This results in a more pleasing aesthetic.
+        bufferLength = Math.floor(analyser.frequencyBinCount/ 1.50); 
+        dataArray = new Uint8Array(bufferLength);
+  
+        //Print information for debugging.
+        console.log("Buffer Length: ", bufferLength);
+        console.log("maxDB: ", analyser.maxDecibels);
+        console.log("minDB: ", analyser.minDecibels);
+        console.log("sampleRate: ", context.sampleRate);
+        console.log("Smoothing Time Constant: ", analyser.smoothingTimeConstant);
+        gettingData()
+  
+        function gettingData () {
+          var drawVisual = requestAnimationFrame(gettingData);
+          analyser.getByteTimeDomainData(dataArray);
+          totalDados.push(dataArray)
+        }
+  
+        audio.addEventListener('pause', () => {
+          grafico()
+          compute()
+          console.log('dados exportar => ', dadosExportar)
+        })
+  
+        function grafico () {
+          var sliceWidth = 400 * 1.0 / bufferLength;
+          var x = 0;
+  
+          for (var b = 0; b < totalDados.length; b++) {
+              for(var i = 0; i < totalDados[b].length; i++) {
+  
+                  var v = dataArray[i] / 128.0;
+                  var y = v * 400/2;
+      
+                  if(i === 0) {
+                    const pt = "{\"X\":"+x+",\"Y\":"+y+",\"Z\":"+0+"}"
+                    data.inputs["points"].push(pt)
+
+                  } else {
+                    const pt = "{\"X\":"+x+",\"Y\":"+y+",\"Z\":"+0+"}"
+                      data.inputs["points"].push(pt)
+
+                  }
+      
+                  x += sliceWidth;
+              }
+          }
+  
+
+        }
+      };
+    };
+  
+    
+async function compute() {
+      let t0 = performance.now()
+      const timeComputeStart = t0
+
+showSpinner(true)
+
+let params=[]
+for(let i =0;i<=29;i++){
+  params.push(data.inputs.points[i])
+}
+
+data.inputs.points = params
+
+// use POST request
+const request = {
+  'method':'POST',
+  'body': JSON.stringify(data),
+  'headers': {'Content-Type': 'application/json',
+}
+}
+//aqui ele manda os dados para o solve 
+try {
+    const response = await fetch('/solve', request)
+  
+    if(!response.ok) {
+      // TODO: check for errors in response json
+      throw new Error(response.statusText)
+    }
+
+    const responseJson = await response.json()
+
+    let t1 = performance.now()
+    const computeSolveTime = t1 - timeComputeStart
+    t0 = t1
+
+    collectResults(responseJson)
+
+  } catch(error) {
+    console.error(error)
+  }
+}
+
+
+function collectResults(responseJson) {
+
+const values = responseJson.values
+
+// clear doc
+if( doc !== undefined)
+    doc.delete()
+
+//console.log(values)
+doc = new rhino.File3dm()
+
+//doc.objects().addSphere(new rhino.Sphere([0,0,0], 0.001), null)
+// doc.objects().addPoint(0,0,0)
+// doc.objects().addLine([0,0,0], [1,1,1])
+
+// for each output (RH_OUT:*)...
+for ( let i = 0; i < values.length; i ++ ) {
+  // ...iterate through data tree structure...
+  for (const path in values[i].InnerTree) {
+    const branch = values[i].InnerTree[path]
+    // ...and for each branch...
+    for( let j = 0; j < branch.length; j ++) {
+      // ...load rhino geometry into doc
+      const rhinoObject = decodeItem(branch[j])
+      if (rhinoObject !== null) {
+        console.log(rhinoObject)
+        doc.objects().add(rhinoObject, null)
+      }
+    }
+  }
+}
+
+// if (doc.objects().count < 1) {
+//   console.error('No rhino objects to load!')
+//   showSpinner(false)
+//   return
+// }
+
+///////////////////////////////////////////////////////////////////////////
+//console.log(data.inputs.breps)
+
+// const countBefore = data.inputs.breps.length
+// const countAfter = doc.objects().count
+// document.getElementById('msg').innerText = `${countBefore} breps become ${countAfter}!`
+
+// // hack (https://github.com/mcneel/rhino3dm/issues/353)
+// const sphereAttrs = new rhino.ObjectAttributes()
+// sphereAttrs.mode = rhino.ObjectMode.Hidden
+// doc.objects().addSphere(new rhino.Sphere([0,0,0], 0.001), sphereAttrs)
+// // doc.objects().addSphere(new rhino.Sphere([0,0,0], 0.001), null)
+// // doc.objects().addLine(new rhino.Line(0,0,0, 1,1,1), null)
+// console.log(doc.objects().count)
+// ///////////////////////////////////////////////////////////////////////////
+
+// load rhino doc into three.js scene
+const buffer = new Uint8Array(doc.toByteArray()).buffer
+console.log(buffer.byteLength)
+loader.parse( buffer, function ( object ) 
+{
+///////////////////////////////////////////////////////////////////////////
+    object.traverse(child => {
+      if (child.isMesh)
+        child.material = new THREE.MeshNormalMaterial({ wireframe: true })
+    }, false)
+///////////////////////////////////////////////////////////////////////////
+
+    // clear objects from scene. do this here to avoid blink
+    scene.traverse(child => {
+        if (!child.isLight) {
+            scene.remove(child)
+        }
+    })
+
+    // add object graph from rhino model to three.js scene
+    scene.add( object )
+
+    // hide spinner and enable download button
+    showSpinner(false)
+    downloadButton.disabled = false
+
+    // zoom to extents
+    zoomCameraToSelection(camera, controls, scene.children)
+})
+}
+
+var scene, camera, renderer, controls
+
+
+
+        </script>
+
+   </body>
+
+
